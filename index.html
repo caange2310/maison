@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Tableau de la maison</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Maison">
+<!--
+  Tableau de bord mural pour une ancienne tablette.
+  Une seule page, sans dépendance. Code volontairement écrit "à l'ancienne"
+  (pas de grille CSS, pas de variables CSS, pas de JavaScript moderne) pour tourner sur un vieux Safari.
+  Tout ce qui est saisi (ville, courses, week-ends, dates, photos) reste sur la tablette.
+-->
+<style>
+* { -webkit-box-sizing: border-box; box-sizing: border-box; }
+html { font-size: 16px; }
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #0e1217; color: #eef1f5;
+  font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+button, input { font-family: inherit; -webkit-appearance: none; border-radius: 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+
+#fond { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 0; background-size: cover; background-position: center center; background-repeat: no-repeat; }
+#ecran { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; }
+.tuile { position: absolute; background: #19202a; border-radius: 1rem; overflow: hidden; }
+#t-heure   { left: 1.5%;  top: 2%;  width: 35%; height: 34%; }
+#t-meteo   { left: 1.5%;  top: 38%; width: 35%; height: 60%; }
+#t-weekend { left: 38%;   top: 2%;  width: 33%; height: 60%; }
+#t-dates   { left: 38%;   top: 64%; width: 33%; height: 34%; }
+#t-photo   { left: 72.5%; top: 2%;  width: 26%; height: 36%; }
+#t-courses { left: 72.5%; top: 40%; width: 26%; height: 58%; }
+
+.titre {
+  margin: 0; padding: 1rem 1.2rem .4rem;
+  font-size: .8rem; font-weight: 600; letter-spacing: .12em;
+  text-transform: uppercase; color: #8b97a8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vide { padding: 1.2rem; font-size: 1.05rem; line-height: 1.4; color: #6f7b8c; }
+.defile { position: absolute; left: 0; right: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.defile::-webkit-scrollbar { width: 6px; }
+.defile::-webkit-scrollbar-thumb { background: rgba(128,140,156,.45); border-radius: 3px; }
+
+/* Heure */
+#heure { margin-top: 2.4rem; text-align: center; font-size: 7.5rem; font-weight: 200; line-height: 1; letter-spacing: -.02em; }
+#date  { margin-top: .8rem; text-align: center; font-size: 1.4rem; color: #c3ccd8; }
+#date:first-letter { text-transform: uppercase; }
+#b-reglages {
+  position: absolute; right: .5rem; bottom: .4rem; width: 2.8rem; height: 2.8rem;
+  border: 0; background: transparent; color: #6f7b8c; font-size: 1.6rem; padding: 0;
+}
+
+/* Météo */
+#m-maintenant { padding: .2rem 1.2rem 0; line-height: 1; white-space: nowrap; }
+#m-icone { font-size: 4rem; vertical-align: middle; }
+#m-temp  { font-size: 5rem; font-weight: 200; vertical-align: middle; margin-left: .8rem; }
+#m-texte  { padding: .6rem 1.2rem 0; font-size: 1.5rem; }
+#m-detail { padding: .5rem 1.2rem 0; font-size: 1.05rem; line-height: 1.5; color: #a9b4c2; }
+#m-jours  { position: absolute; left: 0; right: 0; bottom: 2rem; border-top: 1px solid #252e3a; padding-top: .7rem; }
+#m-jours .jour { float: left; width: 25%; text-align: center; }
+#m-jours .j-nom { font-size: .9rem; text-transform: uppercase; letter-spacing: .08em; color: #8b97a8; }
+#m-jours .j-ico { font-size: 1.9rem; line-height: 1.5; }
+#m-jours .j-max { font-size: 1.15rem; }
+#m-jours .j-min { font-size: 1rem; color: #7c8898; }
+#m-maj { position: absolute; left: 1.2rem; bottom: .5rem; font-size: .75rem; color: #5d6877; }
+
+/* Week-ends */
+#w-liste { top: 3rem; bottom: .4rem; }
+.we-titre { padding: .3rem 1.2rem .35rem; font-size: 1.05rem; font-weight: 600; }
+.we-titre span { font-weight: 400; font-size: .9rem; color: #8b97a8; margin-left: .5rem; }
+.we-bloc { margin-bottom: 1rem; }
+.we-ligne { position: relative; min-height: 3.1rem; padding: .75rem 1.2rem .75rem 6.6rem; border-top: 1px solid #222a35; font-size: 1.15rem; line-height: 1.35; word-wrap: break-word; }
+.we-jour { position: absolute; left: 1.2rem; top: .95rem; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: #8b97a8; }
+.we-ligne.libre .we-texte { color: #4d596b; }
+.we-ligne.auj .we-jour { color: #f2b84b; font-weight: 700; }
+
+/* Dates */
+#d-liste { top: 3rem; bottom: .4rem; }
+#d-liste li { padding: .55rem 1.2rem; border-bottom: 1px solid #222a35; }
+#d-liste .d-nom { font-size: 1.15rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#d-liste .d-quand { font-size: .95rem; color: #8b97a8; margin-top: .15rem; }
+#d-liste .d-quand b { color: #f2b84b; font-weight: 600; }
+
+/* Photos */
+.calque { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-size: cover; background-position: center center; background-repeat: no-repeat; opacity: 0; -webkit-transition: opacity 1.5s; transition: opacity 1.5s; }
+#photo-vide { position: absolute; top: 3rem; left: 0; right: 0; }
+
+/* Courses */
+#c-liste { top: 3rem; bottom: 4.6rem; }
+#c-liste li { padding: .7rem 1rem .7rem 3.1rem; font-size: 1.2rem; line-height: 1.3; border-bottom: 1px solid #222a35; position: relative; word-wrap: break-word; }
+#c-liste .coche { position: absolute; left: 1rem; top: .75rem; width: 1.4rem; height: 1.4rem; border: 2px solid #56627a; border-radius: 50%; }
+#c-liste li.fait { color: #5d6877; text-decoration: line-through; }
+#c-liste li.fait .coche { background: #f2b84b; border-color: #f2b84b; }
+#c-purge { position: absolute; top: .65rem; right: .8rem; border: 0; background: #252e3a; color: #c3ccd8; font-size: .8rem; padding: .35rem .7rem; border-radius: 1rem; display: none; }
+#c-form { position: absolute; left: .8rem; right: .8rem; bottom: .8rem; margin: 0; }
+#c-saisie { width: 100%; height: 3rem; padding: 0 3.4rem 0 1rem; font-size: 1.15rem; color: #eef1f5; background: #0e1217; border: 1px solid #2c3644; border-radius: .7rem; outline: none; }
+#c-form button { position: absolute; right: .3rem; top: .3rem; width: 2.4rem; height: 2.4rem; border: 0; border-radius: .5rem; background: #f2b84b; color: #19202a; font-size: 1.6rem; line-height: 1; padding: 0; }
+
+/* Boutons et champs communs */
+.champ { height: 2.8rem; padding: 0 .8rem; font-size: 1.1rem; color: #eef1f5; background: #19202a; border: 1px solid #2c3644; border-radius: .6rem; outline: none; vertical-align: middle; margin: 0 .4rem .5rem 0; }
+.bouton { height: 2.8rem; padding: 0 1.1rem; font-size: 1.05rem; border: 0; border-radius: .6rem; background: #f2b84b; color: #19202a; vertical-align: middle; margin: 0 .4rem .5rem 0; }
+.bouton.gris { background: #252e3a; color: #eef1f5; }
+.bouton.gris.choisi { background: #f2b84b; color: #19202a; }
+.fichier { display: block; margin: .6rem 0; color: #a9b4c2; font-size: 1rem; -webkit-appearance: none; }
+
+/* Réglages */
+#reglages { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 20; background: #0e1217; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#reglages .dedans { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
+#reglages h1 { font-size: 1.8rem; font-weight: 300; margin: 0 0 1rem; }
+#reglages h2 { font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; color: #8b97a8; margin: 2rem 0 .7rem; }
+#reglages p { margin: .5rem 0; font-size: 1rem; line-height: 1.45; color: #a9b4c2; }
+#reglages label { font-size: 1rem; color: #c3ccd8; margin-right: .8rem; }
+#b-fermer { float: right; }
+#v-resultats button { display: block; width: 100%; text-align: left; margin: 0 0 .4rem; }
+#r-dates li { padding: .5rem 0; font-size: 1.05rem; border-bottom: 1px solid #222a35; overflow: hidden; line-height: 2.2rem; }
+#r-dates li button { float: right; width: 2.2rem; height: 2.2rem; border: 0; border-radius: .5rem; background: #252e3a; color: #eef1f5; font-size: 1.2rem; padding: 0; }
+
+/* Fenêtre de saisie d'un jour de week-end (placée en haut : le clavier de la tablette prend le bas) */
+#edition { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 30; background: rgba(0,0,0,.6); }
+#edition .boite { max-width: 34rem; margin: 3rem auto 0; padding: 1.4rem; background: #19202a; border-radius: 1rem; }
+#e-titre { margin: 0 0 .9rem; font-size: 1.3rem; font-weight: 400; }
+#e-titre:first-letter { text-transform: uppercase; }
+#e-texte { width: 100%; margin: 0 0 .9rem; background: #0e1217; }
+
+/* Voile de nuit : assombrit l'écran sans le bloquer */
+#voile { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10; background: #000; opacity: 0; pointer-events: none; -webkit-transition: opacity 3s; transition: opacity 3s; }
+
+/* ----- Photo d'arrière-plan : les tuiles deviennent translucides ----- */
+.avecfond .tuile { background: rgba(14,18,24,.76); }
+
+/* ----- Thème clair ----- */
+html.clair, .clair body { background: #e4e9ef; color: #1b2430; }
+.clair .tuile { background: #ffffff; }
+.clair.avecfond .tuile { background: rgba(255,255,255,.84); }
+.clair .titre, .clair .we-titre span, .clair .we-jour, .clair #m-jours .j-nom, .clair #d-liste .d-quand, .clair #reglages h2 { color: #6b7888; }
+.clair .vide, .clair #b-reglages, .clair #m-jours .j-min { color: #8a95a3; }
+.clair #date, .clair #reglages label { color: #44505f; }
+.clair #m-detail, .clair #reglages p, .clair .fichier { color: #5b6878; }
+.clair #m-maj, .clair #c-liste li.fait, .clair .we-ligne.libre .we-texte { color: #a3adb9; }
+.clair #m-jours, .clair .we-ligne, .clair #d-liste li, .clair #c-liste li, .clair #r-dates li { border-color: #e4e9ef; }
+.clair #c-liste .coche { border-color: #aab4c0; }
+.clair #c-liste li.fait .coche { border-color: #f2b84b; }
+.clair #d-liste .d-quand b, .clair .we-ligne.auj .we-jour { color: #b87a00; }
+.clair #c-purge, .clair .bouton.gris, .clair #r-dates li button { background: #d9dfe7; color: #1b2430; }
+.clair .bouton.gris.choisi { background: #f2b84b; }
+.clair #c-saisie, .clair #e-texte { background: #f1f4f7; border-color: #d3dae2; color: #1b2430; }
+.clair .champ { background: #ffffff; border-color: #d3dae2; color: #1b2430; }
+.clair #reglages { background: #e4e9ef; }
+.clair #edition .boite { background: #ffffff; }
+
+/* Tablette tenue en hauteur : les tuiles s'empilent */
+@media (orientation: portrait) {
+  html, body { height: auto; overflow: auto; }
+  #ecran { position: static; padding: .8rem; }
+  #ecran .tuile { position: relative; left: auto; top: auto; width: auto; margin-bottom: .8rem; }
+  #ecran #t-heure { height: 17rem; }
+  #ecran #t-meteo { height: 25rem; }
+  #ecran #t-weekend { height: 28rem; }
+  #ecran #t-dates { height: 18rem; }
+  #ecran #t-photo { height: 26rem; }
+  #ecran #t-courses { height: 30rem; }
+}
+</style>
+</head>
+<body>
+
+<div id="fond"></div>
+
+<div id="ecran">
+  <div id="t-heure" class="tuile">
+    <div id="heure">--:--</div>
+    <div id="date"></div>
+    <button id="b-reglages" type="button" aria-label="Réglages">&#9881;</button>
+  </div>
+
+  <div id="t-meteo" class="tuile">
+    <p class="titre" id="m-titre">Météo</p>
+    <div id="m-vide" class="vide">Chargement de la météo…</div>
+    <div id="m-corps" style="display:none">
+      <div id="m-maintenant"><span id="m-icone"></span><span id="m-temp"></span></div>
+      <div id="m-texte"></div>
+      <div id="m-detail"></div>
+      <div id="m-jours"></div>
+    </div>
+    <div id="m-maj"></div>
+  </div>
+
+  <div id="t-weekend" class="tuile">
+    <p class="titre">Nos week-ends</p>
+    <div id="w-liste" class="defile"></div>
+  </div>
+
+  <div id="t-dates" class="tuile">
+    <p class="titre">À venir</p>
+    <div id="d-vide" class="vide">Anniversaires, vacances, rendez-vous : ajoutez vos dates depuis la roue ⚙.</div>
+    <ul id="d-liste" class="defile"></ul>
+  </div>
+
+  <div id="t-photo" class="tuile">
+    <p class="titre">Photos</p>
+    <div id="photo-vide" class="vide">Ajoutez vos photos depuis la roue ⚙.</div>
+    <div id="photo-a" class="calque"></div>
+    <div id="photo-b" class="calque"></div>
+  </div>
+
+  <div id="t-courses" class="tuile">
+    <p class="titre">Courses</p>
+    <button id="c-purge" type="button">Retirer les cochés</button>
+    <ul id="c-liste" class="defile"></ul>
+    <form id="c-form" action="#">
+      <input id="c-saisie" type="text" placeholder="Ajouter…" autocomplete="off" autocorrect="off">
+      <button type="submit" aria-label="Ajouter">+</button>
+    </form>
+  </div>
+</div>
+
+<div id="voile"></div>
+
+<div id="edition">
+  <form id="e-form" class="boite" action="#">
+    <h3 id="e-titre"></h3>
+    <input id="e-texte" class="champ" type="text" placeholder="Qu’est-ce qu’on fait ?" autocomplete="off">
+    <button class="bouton" type="submit">Enregistrer</button>
+    <button id="e-effacer" class="bouton gris" type="button">Effacer</button>
+    <button id="e-annuler" class="bouton gris" type="button">Annuler</button>
+  </form>
+</div>
+
+<div id="reglages">
+  <div class="dedans">
+    <button id="b-fermer" class="bouton" type="button">Fermer</button>
+    <h1>Réglages</h1>
+
+    <h2>Apparence</h2>
+    <button id="th-sombre" class="bouton gris" type="button">Sombre</button>
+    <button id="th-clair" class="bouton gris" type="button">Clair</button>
+    <button id="th-auto" class="bouton gris" type="button">Automatique</button>
+    <p>Automatique : clair en journée, sombre dès le coucher du soleil.</p>
+
+    <h2>Photo d’arrière-plan</h2>
+    <p id="f-etat"></p>
+    <input id="f-fichier" class="fichier" type="file" accept="image/*">
+    <button id="f-retirer" class="bouton gris" type="button">Retirer l’arrière-plan</button>
+    <p id="f-message"></p>
+
+    <h2>Ville pour la météo</h2>
+    <p id="v-actuelle"></p>
+    <form id="v-form" action="#">
+      <input id="v-saisie" class="champ" type="text" placeholder="Nom de la ville" autocomplete="off" autocorrect="off">
+      <button class="bouton" type="submit">Chercher</button>
+    </form>
+    <div id="v-resultats"></div>
+
+    <h2>Dates à venir</h2>
+    <form id="d-form" action="#">
+      <input id="d-nom" class="champ" type="text" placeholder="Quoi ? (ex. Anniversaire Léa)" autocomplete="off">
+      <input id="d-date" class="champ" type="date" placeholder="JJ/MM/AAAA">
+      <br>
+      <label><input id="d-annuel" type="checkbox" style="-webkit-appearance:checkbox;width:1.2rem;height:1.2rem;vertical-align:middle"> revient tous les ans</label>
+      <button class="bouton" type="submit">Ajouter</button>
+    </form>
+    <p id="d-message"></p>
+    <ul id="r-dates"></ul>
+
+    <h2>Photos du diaporama</h2>
+    <p id="p-compte"></p>
+    <p>Les photos sont réduites et gardées dans la mémoire de la tablette (une trentaine au maximum).</p>
+    <input id="p-fichiers" class="fichier" type="file" accept="image/*" multiple>
+    <button id="p-vider" class="bouton gris" type="button">Supprimer toutes les photos</button>
+    <p id="p-message"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  var JOURS_C = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+  var MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  var MOIS_C = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+  var VILLE_DEFAUT = { nom: 'Marseille', lat: 43.2965, lon: 5.3698 };
+  var NUIT_DEBUT = 22 * 60 + 30;   // l'écran s'assombrit à 22h30
+  var NUIT_FIN = 6 * 60 + 30;      // et se rallume à 6h30
+  var PHOTO_SECONDES = 20;         // durée d'affichage d'une photo
+  var METEO_MINUTES = 30;          // rafraîchissement de la météo
+  var NB_WEEKENDS = 4;             // nombre de week-ends affichés (on fait défiler)
+
+  // ---------- Outils ----------
+  function el(id) { return document.getElementById(id); }
+  function deux(n) { return n < 10 ? '0' + n : String(n); }
+  function vider(n) { while (n.firstChild) { n.removeChild(n.firstChild); } }
+  function creer(balise, classe, texte) {
+    var n = document.createElement(balise);
+    if (classe) { n.className = classe; }
+    if (texte !== undefined && texte !== null) { n.appendChild(document.createTextNode(texte)); }
+    return n;
+  }
+  function texte(id, t) { var n = el(id); vider(n); n.appendChild(document.createTextNode(t)); }
+  function rogner(s) { return String(s).replace(/^\s+|\s+$/g, ''); }
+  function lire(cle, defaut) {
+    try {
+      var v = window.localStorage.getItem(cle);
+      return v ? JSON.parse(v) : defaut;
+    } catch (e) { return defaut; }
+  }
+  function ecrire(cle, valeur) {
+    try { window.localStorage.setItem(cle, JSON.stringify(valeur)); return true; }
+    catch (e) { return false; }
+  }
+  function lireBrut(cle) { try { return window.localStorage.getItem(cle); } catch (e) { return null; } }
+  function oter(cle) { try { window.localStorage.removeItem(cle); } catch (e) {} }
+  function requete(url, ok, ko) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url, true);
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) { return; }
+      var j = null;
+      if (x.status === 200) {
+        try { j = JSON.parse(x.responseText); } catch (e) { j = null; }
+      }
+      if (j) { ok(j); } else if (ko) { ko(); }
+    };
+    try { x.timeout = 15000; } catch (e) {}
+    x.send();
+  }
+  function minuit(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function plusJours(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+  function cleJour(d) { return d.getFullYear() + '-' + deux(d.getMonth() + 1) + '-' + deux(d.getDate()); }
+  function minutesDe(iso) { var s = String(iso); return (+s.substr(11, 2)) * 60 + (+s.substr(14, 2)); }
+
+  // Réduit une photo avant de la garder : la mémoire d'une tablette est petite
+  function reduire(fichier, cote, suite) {
+    var lecteur = new FileReader();
+    lecteur.onerror = function () { suite(null); };
+    lecteur.onload = function () {
+      var im = new Image();
+      im.onerror = function () { suite(null); };
+      im.onload = function () {
+        var k = Math.min(1, cote / Math.max(im.width, im.height));
+        var c = document.createElement('canvas');
+        var url = null;
+        c.width = Math.round(im.width * k);
+        c.height = Math.round(im.height * k);
+        try {
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          url = c.toDataURL('image/jpeg', 0.7);
+        } catch (e) { url = null; }
+        suite(url);
+      };
+      im.src = lecteur.result;
+    };
+    lecteur.readAsDataURL(fichier);
+  }
+
+  // ---------- Mise à l'échelle : tout est proportionnel à un écran 1024 x 768 ----------
+  function echelle() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var k = w > h ? Math.min(w / 1024, h / 768) : w / 768;
+    if (k < 0.6) { k = 0.6; }
+    document.documentElement.style.fontSize = (16 * k) + 'px';
+  }
+
+  // ---------- Apparence : thème et photo d'arrière-plan ----------
+  var soleil = null;        // lever / coucher du jour en minutes, fournis par la météo
+  var fondActif = false;
+  function majTheme() {
+    var t = lire('theme', 'sombre');
+    var clair = (t === 'clair');
+    if (t === 'auto') {
+      var d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+      var lever = soleil ? soleil.lever : 7 * 60 + 30;
+      var coucher = soleil ? soleil.coucher : 19 * 60;
+      clair = (m >= lever && m < coucher);
+    }
+    var classe = (clair ? 'clair' : '') + (fondActif ? ' avecfond' : '');
+    if (document.documentElement.className !== classe) { document.documentElement.className = classe; }
+    el('th-sombre').className = 'bouton gris' + (t === 'sombre' ? ' choisi' : '');
+    el('th-clair').className = 'bouton gris' + (t === 'clair' ? ' choisi' : '');
+    el('th-auto').className = 'bouton gris' + (t === 'auto' ? ' choisi' : '');
+  }
+  function choisirTheme() { ecrire('theme', this.getAttribute('data-theme')); majTheme(); }
+  function majFond() {
+    var url = lireBrut('fond');
+    fondActif = !!url;
+    el('fond').style.backgroundImage = url ? 'url("' + url + '")' : 'none';
+    texte('f-etat', url ? 'Une photo est affichée derrière les tuiles.' : 'Aucune photo d’arrière-plan.');
+    majTheme();
+  }
+  function choisirFond() {
+    var champ = this;
+    if (!champ.files || !champ.files.length) { return; }
+    texte('f-message', 'Enregistrement en cours…');
+    reduire(champ.files[0], 1400, function (url) {
+      champ.value = '';
+      if (!url) { texte('f-message', 'Cette photo n’a pas pu être lue.'); return; }
+      try { window.localStorage.setItem('fond', url); }
+      catch (e) { texte('f-message', 'Mémoire de la tablette pleine : supprimez quelques photos du diaporama.'); return; }
+      texte('f-message', '');
+      majFond();
+    });
+  }
+  function retirerFond() { oter('fond'); texte('f-message', ''); majFond(); }
+
+  // ---------- Heure, date, voile de nuit ----------
+  var demarrage = new Date().getTime();
+  var jourAffiche = -1, minuteAffichee = -1;
+  function majHeure() {
+    var d = new Date();
+    if (d.getMinutes() === minuteAffichee) { return; }
+    minuteAffichee = d.getMinutes();
+    texte('heure', deux(d.getHours()) + ':' + deux(d.getMinutes()));
+    if (d.getDate() !== jourAffiche) {
+      jourAffiche = d.getDate();
+      texte('date', JOURS[d.getDay()] + ' ' + d.getDate() + (d.getDate() === 1 ? 'er' : '') + ' ' + MOIS[d.getMonth()] + ' ' + d.getFullYear());
+      majDates();
+      majWeekends();
+    }
+    var m = d.getHours() * 60 + d.getMinutes();
+    el('voile').style.opacity = (m >= NUIT_DEBUT || m < NUIT_FIN) ? '0.6' : '0';
+    majTheme();
+    // Rechargement quotidien à 4h : évite qu'un vieux navigateur s'essouffle après des semaines
+    if (d.getHours() === 4 && d.getTime() - demarrage > 2 * 3600 * 1000 &&
+        el('reglages').style.display !== 'block' && el('edition').style.display !== 'block') {
+      rechargerSiJoignable();
+    }
+  }
+  // On ne recharge que si la page répond vraiment : sans Wi-Fi à 4h, un rechargement
+  // laisserait un écran d'erreur au mur jusqu'à ce que quelqu'un s'en aperçoive.
+  function rechargerSiJoignable() {
+    var x = new XMLHttpRequest();
+    var adresse = window.location.href.split('#')[0].split('?')[0];
+    try {
+      x.open('GET', adresse + '?v=' + new Date().getTime(), true);
+      x.onreadystatechange = function () {
+        if (x.readyState === 4 && x.status === 200 && x.responseText.indexOf('Tableau de la maison') !== -1) {
+          window.location.reload();
+        }
+      };
+      x.timeout = 15000;
+      x.send();
+    } catch (e) {}
+  }
+
+  // ---------- Météo (service gratuit Open-Meteo, sans compte) ----------
+  function codeMeteo(code, jour) {
+    if (code === 0) { return [jour ? '☀️' : '🌙', 'Ciel dégagé']; }
+    if (code === 1) { return [jour ? '☀️' : '🌙', 'Peu nuageux']; }
+    if (code === 2) { return ['⛅', 'Éclaircies']; }
+    if (code === 3) { return ['☁️', 'Couvert']; }
+    if (code === 45 || code === 48) { return ['🌁', 'Brouillard']; }
+    if (code >= 51 && code <= 57) { return ['☔', 'Bruine']; }
+    if (code >= 61 && code <= 65) { return ['☔', 'Pluie']; }
+    if (code === 66 || code === 67) { return ['☔', 'Pluie verglaçante']; }
+    if (code >= 71 && code <= 77) { return ['❄️', 'Neige']; }
+    if (code >= 80 && code <= 82) { return ['☔', 'Averses']; }
+    if (code === 85 || code === 86) { return ['❄️', 'Averses de neige']; }
+    if (code >= 95) { return ['⚡', 'Orage']; }
+    return ['☁️', ''];
+  }
+  function degres(v) { return Math.round(v) + '°'; }
+
+  function afficherMeteo(j) {
+    if (!j.current || !j.daily || !j.daily.time) { meteoEnPanne(); return; }
+    var c = codeMeteo(j.current.weather_code, j.current.is_day !== 0);
+    var q = j.daily;
+    texte('m-icone', c[0]);
+    texte('m-temp', degres(j.current.temperature_2m));
+    texte('m-texte', c[1]);
+
+    var detail = el('m-detail');
+    vider(detail);
+    detail.appendChild(document.createTextNode('Aujourd’hui ' + degres(q.temperature_2m_min[0]) + ' / ' + degres(q.temperature_2m_max[0])));
+    if (q.precipitation_probability_max && q.precipitation_probability_max[0] !== null) {
+      detail.appendChild(document.createTextNode('  ·  pluie ' + q.precipitation_probability_max[0] + ' %'));
+    }
+    detail.appendChild(document.createElement('br'));
+    detail.appendChild(document.createTextNode('Soleil ' + String(q.sunrise[0]).substr(11, 5) + ' – ' + String(q.sunset[0]).substr(11, 5)));
+    soleil = { lever: minutesDe(q.sunrise[0]), coucher: minutesDe(q.sunset[0]) };
+    majTheme();
+
+    var jours = el('m-jours');
+    vider(jours);
+    for (var i = 1; i < q.time.length && i <= 4; i++) {
+      var p = String(q.time[i]).split('-');
+      var d = new Date(+p[0], +p[1] - 1, +p[2]);
+      var bloc = creer('div', 'jour');
+      bloc.appendChild(creer('div', 'j-nom', JOURS_C[d.getDay()]));
+      bloc.appendChild(creer('div', 'j-ico', codeMeteo(q.weather_code[i], true)[0]));
+      bloc.appendChild(creer('div', 'j-max', degres(q.temperature_2m_max[i])));
+      bloc.appendChild(creer('div', 'j-min', degres(q.temperature_2m_min[i])));
+      jours.appendChild(bloc);
+    }
+
+    var n = new Date();
+    texte('m-maj', 'Mise à jour ' + deux(n.getHours()) + ':' + deux(n.getMinutes()));
+    el('m-vide').style.display = 'none';
+    el('m-corps').style.display = 'block';
+  }
+  function meteoEnPanne() {
+    // On garde l'ancien affichage s'il y en a un, et on le signale
+    texte('m-maj', 'Météo injoignable pour le moment');
+    if (el('m-corps').style.display !== 'block') {
+      texte('m-vide', 'Météo injoignable. Vérifiez le Wi-Fi de la tablette.');
+      el('m-vide').style.display = 'block';
+    }
+  }
+  function majMeteo() {
+    var v = lire('ville', VILLE_DEFAUT);
+    texte('m-titre', 'Météo · ' + v.nom);
+    requete('https://api.open-meteo.com/v1/forecast?latitude=' + v.lat + '&longitude=' + v.lon +
+      '&current=temperature_2m,weather_code,is_day' +
+      '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_probability_max' +
+      '&timezone=auto&forecast_days=5', afficherMeteo, meteoEnPanne);
+  }
+
+  // ---------- Week-ends : vendredi soir, samedi, dimanche ----------
+  var cleEdition = null;
+  function majWeekends() {
+    var auj = minuit(new Date()), js = auj.getDay();
+    // Vendredi du week-end en cours (ven., sam., dim.) ou du prochain
+    var ven = js === 5 ? auj : (js === 6 ? plusJours(auj, -1) : (js === 0 ? plusJours(auj, -2) : plusJours(auj, 5 - js)));
+    var plans = lire('weekends', {}), k, change = false;
+    var limite = cleJour(ven), cleAuj = cleJour(auj);
+    for (k in plans) {
+      if (plans.hasOwnProperty(k) && k < limite) { delete plans[k]; change = true; }   // week-ends passés
+    }
+    if (change) { ecrire('weekends', plans); }
+
+    var zone = el('w-liste');
+    vider(zone);
+    for (var i = 0; i < NB_WEEKENDS; i++) {
+      var v = plusJours(ven, 7 * i), s = plusJours(v, 1), d = plusJours(v, 2);
+      var bloc = creer('div', 'we-bloc');
+      var titre = creer('div', 'we-titre', i === 0 ? 'Ce week-end' : (i === 1 ? 'Week-end prochain' : 'Week-end'));
+      titre.appendChild(creer('span', '', v.getDate() + (v.getMonth() === d.getMonth() ? '' : ' ' + MOIS_C[v.getMonth()]) + ' – ' + d.getDate() + ' ' + MOIS_C[d.getMonth()]));
+      bloc.appendChild(titre);
+      var jours = [[v, 'Ven. soir', 'vendredi soir'], [s, 'Samedi', 'samedi'], [d, 'Dimanche', 'dimanche']];
+      for (var n = 0; n < 3; n++) {
+        var jour = jours[n][0], cle = cleJour(jour), prevu = plans[cle];
+        var ligne = creer('div', 'we-ligne' + (prevu ? '' : ' libre') + (cle === cleAuj ? ' auj' : ''));
+        ligne.appendChild(creer('span', 'we-jour', jours[n][1]));
+        ligne.appendChild(creer('span', 'we-texte', prevu || '+'));
+        ligne.setAttribute('data-cle', cle);
+        ligne.setAttribute('data-nom', jours[n][2] + ' ' + jour.getDate() + (jour.getDate() === 1 ? 'er' : '') + ' ' + MOIS[jour.getMonth()]);
+        ligne.onclick = ouvrirEdition;
+        bloc.appendChild(ligne);
+      }
+      zone.appendChild(bloc);
+    }
+  }
+  function ouvrirEdition() {
+    cleEdition = this.getAttribute('data-cle');
+    texte('e-titre', this.getAttribute('data-nom'));
+    el('e-texte').value = lire('weekends', {})[cleEdition] || '';
+    el('edition').style.display = 'block';
+    try { el('e-texte').focus(); } catch (e) {}
+  }
+  function fermerEdition() {
+    try { el('e-texte').blur(); } catch (e) {}
+    el('edition').style.display = 'none';
+    cleEdition = null;
+  }
+  function enregistrerEdition(e) {
+    if (e && e.preventDefault) { e.preventDefault(); }
+    if (cleEdition) {
+      var plans = lire('weekends', {}), t = rogner(el('e-texte').value);
+      if (t) { plans[cleEdition] = t; } else { delete plans[cleEdition]; }
+      ecrire('weekends', plans);
+    }
+    fermerEdition();
+    majWeekends();
+    return false;
+  }
+  function effacerEdition() { el('e-texte').value = ''; enregistrerEdition(); }
+
+  // ---------- Liste de courses ----------
+  function majCourses() {
+    var liste = lire('courses', []);
+    var ul = el('c-liste');
+    var faits = 0;
+    vider(ul);
+    for (var i = 0; i < liste.length; i++) {
+      var li = creer('li', liste[i].f ? 'fait' : '');
+      li.appendChild(creer('span', 'coche'));
+      li.appendChild(document.createTextNode(liste[i].t));
+      li.setAttribute('data-i', i);
+      li.onclick = basculerCourse;
+      ul.appendChild(li);
+      if (liste[i].f) { faits++; }
+    }
+    el('c-purge').style.display = faits ? 'block' : 'none';
+  }
+  function basculerCourse() {
+    var liste = lire('courses', []);
+    var i = +this.getAttribute('data-i');
+    if (liste[i]) { liste[i].f = !liste[i].f; ecrire('courses', liste); }
+    majCourses();
+  }
+  function ajouterCourse(e) {
+    if (e && e.preventDefault) { e.preventDefault(); }
+    var champ = el('c-saisie');
+    var t = rogner(champ.value);
+    if (t) {
+      var liste = lire('courses', []);
+      liste.push({ t: t, f: false });
+      ecrire('courses', liste);
+      champ.value = '';
+      majCourses();
+      var ul = el('c-liste');
+      ul.scrollTop = ul.scrollHeight;
+    }
+    return false;
+  }
+  function purgerCourses() {
+    var liste = lire('courses', []), reste = [];
+    for (var i = 0; i < liste.length; i++) { if (!liste[i].f) { reste.push(liste[i]); } }
+    ecrire('courses', reste);
+    majCourses();
+  }
+
+  // ---------- Dates à venir ----------
+  function lireDate(s) {
+    var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+    if (m) { return { y: +m[1], m: +m[2], j: +m[3] }; }
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (m) { return { y: +m[3], m: +m[2], j: +m[1] }; }
+    return null;
+  }
+  function prochaine(ev, auj) {
+    var d;
+    if (ev.a) {
+      d = new Date(auj.getFullYear(), ev.m - 1, ev.j);
+      if (d.getTime() < auj.getTime()) { d = new Date(auj.getFullYear() + 1, ev.m - 1, ev.j); }
+    } else {
+      d = new Date(ev.y, ev.m - 1, ev.j);
+    }
+    return d;
+  }
+  function majDates() {
+    var auj = minuit(new Date());
+    var tous = lire('dates', []), gardes = [], lignes = [], i;
+    for (i = 0; i < tous.length; i++) {
+      var d = prochaine(tous[i], auj);
+      var ecart = Math.round((d.getTime() - auj.getTime()) / 86400000);
+      if (ecart < 0) { continue; }            // date passée et non annuelle : on l'oublie
+      gardes.push(tous[i]);
+      lignes.push({ ev: tous[i], d: d, ecart: ecart, i: gardes.length - 1 });
+    }
+    if (gardes.length !== tous.length) { ecrire('dates', gardes); }
+    lignes.sort(function (a, b) { return a.ecart - b.ecart; });
+
+    var ul = el('d-liste'), reg = el('r-dates');
+    vider(ul); vider(reg);
+    el('d-vide').style.display = lignes.length ? 'none' : 'block';
+    for (i = 0; i < lignes.length; i++) {
+      var l = lignes[i];
+      var quand = l.ecart === 0 ? 'aujourd’hui' : (l.ecart === 1 ? 'demain' : 'dans ' + l.ecart + ' jours');
+      var jour = JOURS_C[l.d.getDay()] + ' ' + l.d.getDate() + ' ' + MOIS[l.d.getMonth()];
+
+      var li = creer('li');
+      li.appendChild(creer('div', 'd-nom', l.ev.l));
+      var sous = creer('div', 'd-quand');
+      sous.appendChild(creer('b', '', quand));
+      sous.appendChild(document.createTextNode('  ·  ' + jour));
+      li.appendChild(sous);
+      ul.appendChild(li);
+
+      var lr = creer('li');
+      var b = creer('button', '', '×');
+      b.type = 'button';
+      b.setAttribute('data-i', l.i);
+      b.onclick = supprimerDate;
+      lr.appendChild(b);
+      lr.appendChild(document.createTextNode(l.ev.l + ' — ' + jour + (l.ev.a ? ' (tous les ans)' : ' ' + l.d.getFullYear())));
+      reg.appendChild(lr);
+    }
+  }
+  function ajouterDate(e) {
+    if (e && e.preventDefault) { e.preventDefault(); }
+    var nom = rogner(el('d-nom').value);
+    var d = lireDate(el('d-date').value);
+    if (!nom || !d) {
+      texte('d-message', 'Indiquez un intitulé et une date (JJ/MM/AAAA).');
+      return false;
+    }
+    var tous = lire('dates', []);
+    tous.push({ l: nom, y: d.y, m: d.m, j: d.j, a: el('d-annuel').checked });
+    ecrire('dates', tous);
+    el('d-nom').value = ''; el('d-date').value = ''; el('d-annuel').checked = false;
+    texte('d-message', '');
+    majDates();
+    return false;
+  }
+  function supprimerDate() {
+    var tous = lire('dates', []);
+    tous.splice(+this.getAttribute('data-i'), 1);
+    ecrire('dates', tous);
+    majDates();
+  }
+
+  // ---------- Photos du diaporama ----------
+  var calques, face = 0, rang = -1;
+  function nbPhotos() { return lire('ph_n', 0); }
+  function photoSuivante() {
+    var n = nbPhotos();
+    el('photo-vide').style.display = n ? 'none' : 'block';
+    if (!n) { calques[0].style.opacity = '0'; calques[1].style.opacity = '0'; return; }
+    rang = (rang + 1) % n;
+    var url = lireBrut('ph_' + rang);
+    if (!url) { return; }
+    face = 1 - face;
+    calques[face].style.backgroundImage = 'url("' + url + '")';
+    calques[face].style.opacity = '1';
+    calques[1 - face].style.opacity = '0';
+  }
+  function majComptePhotos() {
+    var n = nbPhotos();
+    texte('p-compte', n ? n + (n > 1 ? ' photos enregistrées.' : ' photo enregistrée.') : 'Aucune photo pour le moment.');
+  }
+  function ajouterPhotos() {
+    var fichiers = this.files, champ = this;
+    if (!fichiers || !fichiers.length) { return; }
+    var i = 0, n = nbPhotos(), ajoutees = 0;
+    texte('p-message', 'Enregistrement en cours…');
+    function fin(plein) {
+      champ.value = '';
+      majComptePhotos();
+      texte('p-message', plein
+        ? ajoutees + ' photo(s) ajoutée(s). La mémoire de la tablette est pleine : les suivantes n’ont pas été gardées.'
+        : ajoutees + ' photo(s) ajoutée(s).');
+      if (ajoutees) { photoSuivante(); }
+    }
+    function suite() {
+      if (i >= fichiers.length) { fin(false); return; }
+      reduire(fichiers[i++], 1000, function (url) {
+        if (!url) { suite(); return; }
+        try {
+          window.localStorage.setItem('ph_' + n, url);
+          window.localStorage.setItem('ph_n', String(n + 1));
+        } catch (e) {
+          oter('ph_' + n);
+          fin(true);
+          return;
+        }
+        n++; ajoutees++;
+        suite();
+      });
+    }
+    suite();
+  }
+  function viderPhotos() {
+    var n = nbPhotos();
+    for (var i = 0; i < n; i++) { oter('ph_' + i); }
+    oter('ph_n');
+    rang = -1;
+    texte('p-message', 'Photos supprimées.');
+    majComptePhotos();
+    photoSuivante();
+  }
+
+  // ---------- Réglages ----------
+  function majVilleActuelle() {
+    texte('v-actuelle', 'Ville actuelle : ' + lire('ville', VILLE_DEFAUT).nom + '.');
+  }
+  function ouvrirReglages() {
+    majVilleActuelle(); majComptePhotos();
+    texte('p-message', ''); texte('d-message', ''); texte('f-message', '');
+    vider(el('v-resultats'));
+    el('reglages').style.display = 'block';
+  }
+  function fermerReglages() { el('reglages').style.display = 'none'; }
+  function chercherVille(e) {
+    if (e && e.preventDefault) { e.preventDefault(); }
+    var nom = rogner(el('v-saisie').value);
+    var zone = el('v-resultats');
+    if (!nom) { return false; }
+    vider(zone);
+    zone.appendChild(creer('p', '', 'Recherche…'));
+    requete('https://geocoding-api.open-meteo.com/v1/search?count=6&language=fr&format=json&name=' + encodeURIComponent(nom),
+      function (j) {
+        vider(zone);
+        if (!j.results || !j.results.length) { zone.appendChild(creer('p', '', 'Aucune ville trouvée.')); return; }
+        for (var i = 0; i < j.results.length; i++) {
+          var r = j.results[i];
+          var b = creer('button', 'bouton gris', r.name + (r.admin1 ? ', ' + r.admin1 : '') + (r.country ? ' (' + r.country + ')' : ''));
+          b.type = 'button';
+          b.setAttribute('data-nom', r.name);
+          b.setAttribute('data-lat', r.latitude);
+          b.setAttribute('data-lon', r.longitude);
+          b.onclick = choisirVille;
+          zone.appendChild(b);
+        }
+      },
+      function () { vider(zone); zone.appendChild(creer('p', '', 'Recherche impossible. Vérifiez le Wi-Fi.')); });
+    return false;
+  }
+  function choisirVille() {
+    ecrire('ville', { nom: this.getAttribute('data-nom'), lat: +this.getAttribute('data-lat'), lon: +this.getAttribute('data-lon') });
+    vider(el('v-resultats'));
+    el('v-saisie').value = '';
+    majVilleActuelle();
+    majMeteo();
+  }
+
+  // ---------- Démarrage ----------
+  calques = [el('photo-a'), el('photo-b')];
+  el('th-sombre').setAttribute('data-theme', 'sombre');
+  el('th-clair').setAttribute('data-theme', 'clair');
+  el('th-auto').setAttribute('data-theme', 'auto');
+  el('th-sombre').onclick = choisirTheme;
+  el('th-clair').onclick = choisirTheme;
+  el('th-auto').onclick = choisirTheme;
+  el('f-fichier').onchange = choisirFond;
+  el('f-retirer').onclick = retirerFond;
+  el('e-form').onsubmit = enregistrerEdition;
+  el('e-effacer').onclick = effacerEdition;
+  el('e-annuler').onclick = fermerEdition;
+  el('c-form').onsubmit = ajouterCourse;
+  el('c-purge').onclick = purgerCourses;
+  el('d-form').onsubmit = ajouterDate;
+  el('v-form').onsubmit = chercherVille;
+  el('b-reglages').onclick = ouvrirReglages;
+  el('b-fermer').onclick = fermerReglages;
+  el('p-fichiers').onchange = ajouterPhotos;
+  el('p-vider').onclick = viderPhotos;
+  window.onresize = echelle;
+  window.onorientationchange = echelle;
+
+  echelle();
+  majFond();           // applique aussi le thème
+  majHeure();          // affiche aussi les dates et les week-ends
+  majCourses();
+  majMeteo();
+  photoSuivante();
+  window.setInterval(majHeure, 1000);
+  window.setInterval(majMeteo, METEO_MINUTES * 60 * 1000);
+  window.setInterval(photoSuivante, PHOTO_SECONDES * 1000);
+}());
+</script>
+</body>
+</html>
